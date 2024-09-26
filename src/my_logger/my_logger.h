@@ -6,8 +6,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <thread>
-#include <thread>
-// #include <iostream>
+#include <atomic>
 #include <fstream>
 
 
@@ -31,7 +30,8 @@ private:
     std::queue<std::string> queue;
     std::string log_filename;
     std::thread writer;
-    bool is_stopped = false;
+    std::atomic<bool> is_stopped = false;
+    std::atomic<int> logs_counter = 0;
 
     void write_loop();
 };

@@ -5,16 +5,17 @@ MyLogger::MyLogger(std::string filename): log_filename(filename) {
 }
 
 void MyLogger::log(std::string str) {
+    logs_counter++;
+
+    // if at this moment stop() is called log will not save
+
     if (is_stopped) {
+        logs_counter--;
         return;
     }
 
     {
         std::unique_lock lock(m);
-
-        // if (is_stopped) {
-        //     return;
-        // }
 
         queue.push(str);
     }
@@ -23,10 +24,8 @@ void MyLogger::log(std::string str) {
 }
 
 void MyLogger::stop() {
-    {
-        std::unique_lock lock(m);
-        is_stopped = true;
-    }
+    is_stopped = true;
+
     cv.notify_one();
     writer.join();
 }
@@ -36,7 +35,7 @@ void MyLogger::write_loop() {
     log_file.open(log_filename);
 
     while (1) {
-        std::string log_message;
+        std::vector<std::string> logs_to_process;
         {
             std::unique_lock lock(m);
             if (!is_stopped) {
@@ -46,15 +45,21 @@ void MyLogger::write_loop() {
                     });
             }
             
-            if (queue.empty() && is_stopped) {
+            if (is_stopped && logs_counter == 0) {
                 break;
             }
+            
+            logs_to_process.reserve(queue.size());
 
-            log_message = queue.front();
-            queue.pop();
+            while (!queue.empty()) {
+                logs_to_process.push_back(std::move(queue.front()));
+                queue.pop();
+            }
         }
-
-        log_file << log_message;
+        for (const auto& log: logs_to_process) {
+            logs_counter--;
+            log_file << log;
+        }
     }
 
     log_file.close();
